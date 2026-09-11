@@ -2,8 +2,10 @@
 
 package app.tonica.ui
 
+import android.Manifest
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -22,9 +24,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -45,6 +49,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -74,8 +79,12 @@ import app.tonica.data.Album
 import app.tonica.data.Artist
 import app.tonica.data.ArtistIndex
 import app.tonica.data.DownloadedTrack
+import app.tonica.data.FileNameStyle
+import app.tonica.data.FolderLayout
+import app.tonica.data.Genre
 import app.tonica.data.NdSession
 import app.tonica.data.SearchResult
+import app.tonica.data.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -208,10 +217,17 @@ fun LoginScreen(app: TonicaApp) {
 }
 
 @Composable
-fun LibraryScreen(app: TonicaApp, session: NdSession, onArtist: (String) -> Unit, onAlbum: (String) -> Unit) {
+fun LibraryScreen(
+    app: TonicaApp,
+    session: NdSession,
+    onArtist: (String) -> Unit,
+    onAlbum: (String) -> Unit,
+    onGenre: (String) -> Unit,
+) {
     var tab by remember { mutableIntStateOf(0) }
     var indexes by remember { mutableStateOf<List<ArtistIndex>>(emptyList()) }
     var albums by remember { mutableStateOf<List<Album>>(emptyList()) }
+    var genres by remember { mutableStateOf<List<Genre>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -222,6 +238,7 @@ fun LibraryScreen(app: TonicaApp, session: NdSession, onArtist: (String) -> Unit
             withContext(Dispatchers.IO) {
                 indexes = app.client.artists(session)
                 albums = app.client.albums(session)
+                genres = runCatching { app.client.genres(session) }.getOrDefault(emptyList())
             }
         } catch (e: Exception) {
             error = e.message ?: "Не удалось загрузить библиотеку"
@@ -241,6 +258,7 @@ fun LibraryScreen(app: TonicaApp, session: NdSession, onArtist: (String) -> Unit
         Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = tab == 0, onClick = { tab = 0 }, label = { Text("Исполнители") })
             FilterChip(selected = tab == 1, onClick = { tab = 1 }, label = { Text("Альбомы") })
+            FilterChip(selected = tab == 2, onClick = { tab = 2 }, label = { Text("Жанры") })
         }
         when {
             loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -264,11 +282,19 @@ fun LibraryScreen(app: TonicaApp, session: NdSession, onArtist: (String) -> Unit
                     }
                 }
             }
-            else -> {
+            tab == 1 -> {
                 if (albums.isEmpty()) EmptyState("Пусто", "На сервере пока нет альбомов")
                 else LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
                     items(albums, key = { it.id }) { album ->
                         AlbumRow(app, session, album) { onAlbum(album.id) }
+                    }
+                }
+            }
+            else -> {
+                if (genres.isEmpty()) EmptyState("Пусто", "Сервер не вернул жанры")
+                else LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+                    items(genres, key = { it.name }) { genre ->
+                        GenreRow(genre) { onGenre(genre.name) }
                     }
                 }
             }
@@ -298,6 +324,31 @@ private fun ArtistRow(app: TonicaApp, session: NdSession, artist: Artist, onClic
 }
 
 @Composable
+private fun GenreRow(genre: Genre, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                genre.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val line = listOfNotNull(
+                albumsLabel(genre.albumCount).takeIf { genre.albumCount > 0 },
+                tracksLabel(genre.songCount).takeIf { genre.songCount > 0 },
+            ).joinToString(" · ")
+            if (line.isNotBlank()) {
+                Text(line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
 fun ArtistScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> Unit, onAlbum: (String) -> Unit) {
     var artist by remember { mutableStateOf<Artist?>(null) }
     var albums by remember { mutableStateOf<List<Album>>(emptyList()) }
@@ -322,7 +373,7 @@ fun ArtistScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> U
 
     Column(Modifier.fillMaxSize()) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
+            Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
@@ -341,6 +392,12 @@ fun ArtistScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> U
                     )
                     Text(albumsLabel(albums.size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                IconButton(
+                    onClick = { app.downloadArtist(session, id) },
+                    enabled = albums.isNotEmpty(),
+                ) {
+                    Icon(Icons.Filled.Download, contentDescription = "Скачать всю дискографию")
+                }
             } else {
                 Text("Исполнитель", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
             }
@@ -349,10 +406,26 @@ fun ArtistScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> U
             loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             error != null -> EmptyState("Ошибка", error!!)
             else -> LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+                item {
+                    FilledTonalButton(
+                        onClick = { app.downloadArtist(session, id) },
+                        enabled = albums.isNotEmpty(),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Icon(Icons.Filled.Download, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Скачать всё")
+                    }
+                }
                 items(albums, key = { it.id }) { album ->
                     val localCount = tracks.count { it.albumId == album.id }
                     val subtitle = buildString {
                         if (album.year > 0) append(album.year)
+                        if (album.genre.isNotBlank()) {
+                            if (isNotEmpty()) append(" · ")
+                            append(album.genre)
+                        }
                         if (album.songCount > 0) {
                             if (isNotEmpty()) append(" · ")
                             append(tracksLabel(album.songCount))
@@ -381,6 +454,7 @@ fun AlbumScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> Un
     LaunchedEffect(id) {
         loading = true
         ready = false
+        app.lockPlay(900)
         try {
             album = withContext(Dispatchers.IO) { app.client.album(session, id) }
         } catch (e: Exception) {
@@ -388,7 +462,7 @@ fun AlbumScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> Un
         } finally {
             loading = false
         }
-        delay(400)
+        delay(700)
         ready = true
     }
 
@@ -414,7 +488,11 @@ fun AlbumScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> Un
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        listOfNotNull(a.artist.takeIf { it.isNotBlank() }, a.year.takeIf { it > 0 }?.toString()).joinToString(" · "),
+                        listOfNotNull(
+                            a.artist.takeIf { it.isNotBlank() },
+                            a.genre.takeIf { it.isNotBlank() },
+                            a.year.takeIf { it > 0 }?.toString(),
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -426,7 +504,7 @@ fun AlbumScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> Un
             }
         }
         when {
-            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            loading || !ready -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             error != null -> EmptyState("Ошибка", error!!)
             else -> {
                 Row(
@@ -435,7 +513,7 @@ fun AlbumScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> Un
                 ) {
                     Button(
                         onClick = { app.play(session, songs, 0) },
-                        enabled = ready && songs.isNotEmpty(),
+                        enabled = songs.isNotEmpty(),
                         shape = RoundedCornerShape(16.dp),
                     ) {
                         Icon(Icons.Filled.PlayArrow, null)
@@ -444,7 +522,6 @@ fun AlbumScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> Un
                     }
                     FilledTonalButton(
                         onClick = { app.download(session, songs.filter { t -> tracks.none { it.id == t.id } }) },
-                        enabled = ready,
                         shape = RoundedCornerShape(16.dp),
                     ) {
                         Icon(Icons.Filled.Download, null)
@@ -462,7 +539,7 @@ fun AlbumScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> Un
                             downloaded = tracks.any { it.id == song.id },
                             downloading = job != null && job.error == null,
                             progress = job?.progress ?: 0f,
-                            enabled = ready,
+                            enabled = true,
                             onPlay = { app.play(session, songs, songs.indexOf(song)) },
                             onDownload = { app.download(session, listOf(song)) },
                         )
@@ -477,7 +554,116 @@ fun AlbumScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> Un
 }
 
 @Composable
-fun SearchScreen(app: TonicaApp, session: NdSession, onArtist: (String) -> Unit, onAlbum: (String) -> Unit) {
+fun GenreScreen(
+    app: TonicaApp,
+    session: NdSession,
+    name: String,
+    onBack: () -> Unit,
+    onAlbum: (String) -> Unit,
+) {
+    var albums by remember { mutableStateOf<List<Album>>(emptyList()) }
+    var songs by remember { mutableStateOf<List<Song>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val tracks by app.downloads.tracks.collectAsState()
+    val jobs by app.downloads.jobs.collectAsState()
+
+    LaunchedEffect(name) {
+        loading = true
+        try {
+            withContext(Dispatchers.IO) {
+                albums = app.client.albumsByGenre(session, name)
+                songs = app.client.songsByGenre(session, name)
+            }
+        } catch (e: Exception) {
+            error = e.message
+        } finally {
+            loading = false
+        }
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    listOf(albumsLabel(albums.size), tracksLabel(songs.size)).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(
+                onClick = { app.download(session, songs.filter { t -> tracks.none { it.id == t.id } }) },
+                enabled = songs.isNotEmpty(),
+            ) {
+                Icon(Icons.Filled.Download, contentDescription = "Скачать жанр")
+            }
+        }
+        when {
+            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            error != null -> EmptyState("Ошибка", error!!)
+            albums.isEmpty() && songs.isEmpty() -> EmptyState("Пусто", "В этом жанре ничего нет")
+            else -> LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+                if (albums.isNotEmpty()) {
+                    item {
+                        Text(
+                            "Альбомы",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        )
+                    }
+                    items(albums, key = { "al-${it.id}" }) { album ->
+                        AlbumRow(app, session, album) { onAlbum(album.id) }
+                    }
+                }
+                if (songs.isNotEmpty()) {
+                    item {
+                        Text(
+                            "Треки",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        )
+                    }
+                    items(songs, key = { "s-${it.id}" }) { song ->
+                        val job = jobs.find { it.id == song.id }
+                        TrackRow(
+                            song = song,
+                            session = session,
+                            app = app,
+                            downloaded = tracks.any { it.id == song.id },
+                            downloading = job != null && job.error == null,
+                            progress = job?.progress ?: 0f,
+                            onPlay = { app.play(session, songs, songs.indexOf(song)) },
+                            onDownload = { app.download(session, listOf(song)) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SearchScreen(
+    app: TonicaApp,
+    session: NdSession,
+    onArtist: (String) -> Unit,
+    onAlbum: (String) -> Unit,
+    onGenre: (String) -> Unit,
+) {
     var query by remember { mutableStateOf("") }
     var result by remember { mutableStateOf(SearchResult()) }
     var loading by remember { mutableStateOf(false) }
@@ -512,18 +698,24 @@ fun SearchScreen(app: TonicaApp, session: NdSession, onArtist: (String) -> Unit,
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Альбомы, треки, исполнители") },
+            placeholder = { Text("Альбомы, треки, исполнители, жанры") },
             leadingIcon = { Icon(Icons.Filled.Search, null) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             shape = RoundedCornerShape(20.dp),
         )
         when {
-            query.isBlank() -> EmptyState("Найдите музыку", "Ищите по альбомам, трекам и исполнителям")
+            query.isBlank() -> EmptyState("Найдите музыку", "Ищите по альбомам, трекам, исполнителям и жанрам")
             loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            result.artists.isEmpty() && result.albums.isEmpty() && result.songs.isEmpty() ->
+            result.artists.isEmpty() && result.albums.isEmpty() && result.songs.isEmpty() && result.genres.isEmpty() ->
                 EmptyState("Ничего не нашлось", "Попробуйте другой запрос")
             else -> LazyColumn(contentPadding = PaddingValues(bottom = 16.dp, top = 12.dp)) {
+                if (result.genres.isNotEmpty()) {
+                    item { Text("Жанры", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
+                    items(result.genres, key = { "g-${it.name}" }) { genre ->
+                        GenreRow(genre) { onGenre(genre.name) }
+                    }
+                }
                 if (result.artists.isNotEmpty()) {
                     item { Text("Исполнители", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
                     items(result.artists, key = { "a-${it.id}" }) { artist ->
@@ -649,7 +841,8 @@ private fun DownloadedRow(app: TonicaApp, session: NdSession, track: DownloadedT
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface)
-            Text(formatDuration(track.duration), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val meta = listOfNotNull(track.genre.takeIf { it.isNotBlank() }, formatDuration(track.duration)).joinToString(" · ")
+            Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, "Удалить трек") }
     }
@@ -661,17 +854,35 @@ fun SettingsScreen(app: TonicaApp, session: NdSession) {
     val scope = rememberCoroutineScope()
     val folder by app.sessionStore.folderUri.collectAsState(initial = null)
     val showMini by app.sessionStore.showMiniPlayer.collectAsState(initial = true)
+    val layout by app.sessionStore.folderLayout.collectAsState(initial = FolderLayout.ARTIST_ALBUM)
+    val fileStyle by app.sessionStore.fileNameStyle.collectAsState(initial = FileNameStyle.TRACK_TITLE)
+    val notify by app.sessionStore.notifyDownloads.collectAsState(initial = true)
+    var importStatus by remember { mutableStateOf<String?>(null) }
+    var importing by remember { mutableStateOf(false) }
+    val notifyPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         if (uri != null) {
             context.contentResolver.takePersistableUriPermission(
                 uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
-            scope.launch { app.sessionStore.setFolder(uri.toString()) }
+            scope.launch {
+                app.sessionStore.setFolder(uri.toString())
+                importing = true
+                importStatus = "Ищем файлы в папке…"
+                val n = withContext(Dispatchers.IO) { app.downloads.importExisting(uri.toString()) }
+                importing = false
+                importStatus = if (n == 0) "Новых файлов не найдено" else "Добавлено треков: $n"
+            }
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+    ) {
         Text(
             "Настройки",
             style = MaterialTheme.typography.headlineMedium,
@@ -690,12 +901,40 @@ fun SettingsScreen(app: TonicaApp, session: NdSession) {
             Column(Modifier.weight(1f).padding(end = 12.dp)) {
                 Text("Мини-плеер", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                 Text(
-                    "Если выключить — панель снизу скрыта всегда. Её также можно смахнуть вниз или закрыть крестиком до следующего трека.",
+                    "Если выключить или смахнуть панель — музыка останавливается.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Switch(checked = showMini, onCheckedChange = { scope.launch { app.sessionStore.setShowMiniPlayer(it) } })
+            Switch(
+                checked = showMini,
+                onCheckedChange = {
+                    scope.launch { app.sessionStore.setShowMiniPlayer(it) }
+                    if (!it) app.player.stop()
+                },
+            )
+        }
+        Spacer(Modifier.height(24.dp))
+        Text("Загрузки", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Text("Уведомления о загрузке", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    "Показывать ход скачивания. Система всё равно держит служебное уведомление, пока идёт фоновая загрузка.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = notify,
+                onCheckedChange = { on ->
+                    scope.launch { app.sessionStore.setNotifyDownloads(on) }
+                    if (on && Build.VERSION.SDK_INT >= 33) {
+                        notifyPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                },
+            )
         }
         Spacer(Modifier.height(24.dp))
         Text("Папка загрузок", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
@@ -715,11 +954,77 @@ fun SettingsScreen(app: TonicaApp, session: NdSession) {
         if (!folder.isNullOrBlank()) {
             TextButton(onClick = { scope.launch { app.sessionStore.setFolder(null) } }) { Text("Сбросить папку") }
         }
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(8.dp))
+        FilledTonalButton(
+            onClick = {
+                scope.launch {
+                    importing = true
+                    importStatus = "Ищем файлы…"
+                    val n = app.importNow()
+                    importing = false
+                    importStatus = if (n == 0) "Новых файлов не найдено" else "Добавлено треков: $n"
+                }
+            },
+            enabled = !importing,
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            if (importing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            else Text("Импортировать из папки")
+        }
+        if (importStatus != null) {
+            Text(
+                importStatus!!,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        Spacer(Modifier.height(24.dp))
+        Text("Структура папок", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "По умолчанию — исполнитель / альбом. Новые загрузки пойдут в выбранную схему.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FolderLayout.entries.forEach { item ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { scope.launch { app.sessionStore.setFolderLayout(item) } }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(
+                    selected = layout == item,
+                    onClick = { scope.launch { app.sessionStore.setFolderLayout(item) } },
+                )
+                Text(item.label, color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Имя файла", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        FileNameStyle.entries.forEach { item ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { scope.launch { app.sessionStore.setFileNameStyle(item) } }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(
+                    selected = fileStyle == item,
+                    onClick = { scope.launch { app.sessionStore.setFileNameStyle(item) } },
+                )
+                Text(item.label, color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+        Spacer(Modifier.height(24.dp))
         Button(
             onClick = { scope.launch { app.sessionStore.clear() } },
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp),
         ) { Text("Выйти") }
+        Spacer(Modifier.height(16.dp))
     }
 }

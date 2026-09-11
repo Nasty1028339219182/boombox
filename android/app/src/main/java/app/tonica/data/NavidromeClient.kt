@@ -142,6 +142,36 @@ class NavidromeClient {
         return out
     }
 
+    fun albumsByGenre(session: NdSession, genre: String): List<Album> {
+        val body = call(
+            session,
+            "getAlbumList2",
+            mapOf("type" to "byGenre", "genre" to genre, "size" to "500"),
+        )
+        return jsonArray(body.optJSONObject("albumList2")?.opt("album")).map { parseAlbum(it) }
+    }
+
+    fun songsByGenre(session: NdSession, genre: String): List<Song> {
+        val body = call(
+            session,
+            "getSongsByGenre",
+            mapOf("genre" to genre, "count" to "500", "offset" to "0"),
+        )
+        return jsonArray(body.optJSONObject("songsByGenre")?.opt("song")).map { parseSong(it) }
+    }
+
+    fun genres(session: NdSession): List<Genre> {
+        val body = call(session, "getGenres")
+        val raw = body.optJSONObject("genres")?.opt("genre") ?: body.opt("genre")
+        return jsonArray(raw).map { item ->
+            Genre(
+                name = item.optString("value").ifBlank { item.optString("name") },
+                songCount = item.optInt("songCount"),
+                albumCount = item.optInt("albumCount"),
+            )
+        }.filter { it.name.isNotBlank() }.sortedBy { it.name.lowercase() }
+    }
+
     fun search(session: NdSession, query: String): SearchResult {
         if (query.isBlank()) return SearchResult()
         val body = call(
@@ -149,11 +179,18 @@ class NavidromeClient {
             "search3",
             mapOf("query" to query, "artistCount" to "12", "albumCount" to "12", "songCount" to "24"),
         )
-        val result = body.optJSONObject("searchResult3") ?: return SearchResult()
+        val sr = body.optJSONObject("searchResult3")
+        val matched = runCatching { genres(session) }.getOrDefault(emptyList())
+            .filter { it.name.contains(query, ignoreCase = true) }
+            .take(16)
+        val extraSongs = if (matched.size == 1) {
+            runCatching { songsByGenre(session, matched.first().name).take(24) }.getOrDefault(emptyList())
+        } else emptyList()
         return SearchResult(
-            artists = jsonArray(result.opt("artist")).map { parseArtist(it) },
-            albums = jsonArray(result.opt("album")).map { parseAlbum(it) },
-            songs = jsonArray(result.opt("song")).map { parseSong(it) },
+            artists = jsonArray(sr?.opt("artist")).map { parseArtist(it) },
+            albums = jsonArray(sr?.opt("album")).map { parseAlbum(it) },
+            songs = (jsonArray(sr?.opt("song")).map { parseSong(it) } + extraSongs).distinctBy { it.id },
+            genres = matched,
         )
     }
 
@@ -201,6 +238,7 @@ class NavidromeClient {
         songCount = obj.optInt("songCount"),
         duration = obj.optInt("duration"),
         year = obj.optInt("year"),
+        genre = obj.optString("genre"),
     )
 
     private fun parseSong(obj: JSONObject) = Song(
@@ -215,6 +253,7 @@ class NavidromeClient {
         duration = obj.optInt("duration"),
         size = obj.optLong("size"),
         suffix = obj.optString("suffix", "mp3").ifBlank { "mp3" },
+        genre = obj.optString("genre"),
     )
 
     private fun jsonArray(value: Any?): List<JSONObject> = when (value) {

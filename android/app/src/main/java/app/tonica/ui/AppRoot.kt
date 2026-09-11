@@ -1,6 +1,10 @@
 package app.tonica.ui
 
+import android.Manifest
 import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -68,18 +72,31 @@ fun AppRoot(app: TonicaApp) {
     val showTabs = tabs.any { it.route == route }
     val showMiniPref by app.sessionStore.showMiniPlayer.collectAsState(initial = true)
     val nowPlaying by app.player.current.collectAsState()
-    var dismissedId by remember { mutableStateOf<String?>(null) }
-    val showMini = showMiniPref && nowPlaying != null && nowPlaying?.id != dismissedId
+    val showMini = showMiniPref && nowPlaying != null
+
+    val notifyPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(current.username) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            notifyPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    LaunchedEffect(showMiniPref) {
+        if (!showMiniPref) app.player.stop()
+    }
 
     fun openArtist(id: String) = nav.navigate("artist/${Uri.encode(id)}")
-    fun openAlbum(id: String) = nav.navigate("album/${Uri.encode(id)}")
+    fun openAlbum(id: String) {
+        app.lockPlay(900)
+        nav.navigate("album/${Uri.encode(id)}")
+    }
+    fun openGenre(name: String) = nav.navigate("genre/${Uri.encode(name)}")
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         bottomBar = {
             Column {
                 if (showMini) {
-                    MiniPlayer(app, current, onDismiss = { dismissedId = nowPlaying?.id })
+                    MiniPlayer(app, current, onDismiss = { app.player.stop() })
                 }
                 if (showTabs) {
                     NavigationBar {
@@ -108,10 +125,10 @@ fun AppRoot(app: TonicaApp) {
             modifier = Modifier.padding(padding),
         ) {
             composable("library") {
-                LibraryScreen(app, current, onArtist = ::openArtist, onAlbum = ::openAlbum)
+                LibraryScreen(app, current, onArtist = ::openArtist, onAlbum = ::openAlbum, onGenre = ::openGenre)
             }
             composable("search") {
-                SearchScreen(app, current, onArtist = ::openArtist, onAlbum = ::openAlbum)
+                SearchScreen(app, current, onArtist = ::openArtist, onAlbum = ::openAlbum, onGenre = ::openGenre)
             }
             composable("downloads") { DownloadsScreen(app, current) }
             composable("settings") { SettingsScreen(app, current) }
@@ -122,6 +139,10 @@ fun AppRoot(app: TonicaApp) {
             composable("album/{id}") { entry ->
                 val id = Uri.decode(entry.arguments?.getString("id") ?: return@composable)
                 AlbumScreen(app, current, id, onBack = { nav.popBackStack() })
+            }
+            composable("genre/{name}") { entry ->
+                val name = Uri.decode(entry.arguments?.getString("name") ?: return@composable)
+                GenreScreen(app, current, name, onBack = { nav.popBackStack() }, onAlbum = ::openAlbum)
             }
         }
     }

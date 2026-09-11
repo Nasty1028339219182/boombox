@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class PlayerController(context: Context) {
     private val player = ExoPlayer.Builder(context).build()
     private var uriFor: ((Song) -> String)? = null
+    private var stopping = false
     private val _queue = MutableStateFlow<List<Song>>(emptyList())
     private val _index = MutableStateFlow(0)
     private val _playing = MutableStateFlow(false)
@@ -26,7 +27,7 @@ class PlayerController(context: Context) {
                 _playing.value = isPlaying
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED) next()
+                if (!stopping && playbackState == Player.STATE_ENDED && _queue.value.isNotEmpty()) next()
             }
         })
     }
@@ -62,6 +63,18 @@ class PlayerController(context: Context) {
         _index.value = (_index.value - 1 + q.size) % q.size
         load(q[_index.value])
         player.play()
+    }
+
+    fun stop() {
+        stopping = true
+        player.stop()
+        player.clearMediaItems()
+        _playing.value = false
+        _current.value = null
+        _queue.value = emptyList()
+        _index.value = 0
+        uriFor = null
+        stopping = false
     }
 
     private fun load(song: Song) {

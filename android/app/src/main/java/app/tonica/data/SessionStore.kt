@@ -22,6 +22,9 @@ class SessionStore(private val context: Context) {
     private val kRemember = booleanPreferencesKey("remember")
     private val kFolder = stringPreferencesKey("folder")
     private val kMini = booleanPreferencesKey("mini_player")
+    private val kLayout = stringPreferencesKey("folder_layout")
+    private val kFileStyle = stringPreferencesKey("file_style")
+    private val kNotify = booleanPreferencesKey("notify_downloads")
     private val ephemeral = MutableStateFlow<NdSession?>(null)
 
     private val persisted: Flow<NdSession?> = context.dataStore.data.map { prefs ->
@@ -45,7 +48,19 @@ class SessionStore(private val context: Context) {
 
     val showMiniPlayer: Flow<Boolean> = context.dataStore.data.map { it[kMini] != false }
 
+    val folderLayout: Flow<FolderLayout> = context.dataStore.data.map { FolderLayout.fromKey(it[kLayout]) }
+
+    val fileNameStyle: Flow<FileNameStyle> = context.dataStore.data.map { FileNameStyle.fromKey(it[kFileStyle]) }
+
+    val notifyDownloads: Flow<Boolean> = context.dataStore.data.map { it[kNotify] != false }
+
     suspend fun current(): NdSession? = session.first()
+
+    suspend fun currentLayout() = folderLayout.first()
+
+    suspend fun currentFileStyle() = fileNameStyle.first()
+
+    suspend fun currentNotify() = notifyDownloads.first()
 
     suspend fun save(session: NdSession) {
         ephemeral.value = session
@@ -80,5 +95,17 @@ class SessionStore(private val context: Context) {
 
     suspend fun setShowMiniPlayer(value: Boolean) {
         context.dataStore.edit { prefs -> prefs[kMini] = value }
+    }
+
+    suspend fun setFolderLayout(layout: FolderLayout) {
+        context.dataStore.edit { prefs -> prefs[kLayout] = layout.key }
+    }
+
+    suspend fun setFileNameStyle(style: FileNameStyle) {
+        context.dataStore.edit { prefs -> prefs[kFileStyle] = style.key }
+    }
+
+    suspend fun setNotifyDownloads(value: Boolean) {
+        context.dataStore.edit { prefs -> prefs[kNotify] = value }
     }
 }

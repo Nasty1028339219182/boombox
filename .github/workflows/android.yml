@@ -25,16 +25,24 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: boombox-1.0.1
+          name: boombox-1.1.0
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.1
-          name: Boombox 1.0.1
+          tag_name: v1.1.0
+          name: Boombox 1.1.0
           body: |
-            **Boombox 1.0.1** — release-сборка (не debug).
+            **Boombox 1.1.0** — release-сборка (не debug).
+
+            - Жанры в библиотеке и поиске
+            - Скачивание всей дискографии исполнителя
+            - Фоновые загрузки с уведомлением (можно выключить)
+            - Структура папок: по умолчанию Исполнитель/Альбом, можно сменить
+            - Импорт уже скачанных файлов после переустановки
+            - Скрытие мини-плеера останавливает музыку
+            - Исправлено случайное включение трека при открытии альбома
 
             Установка: скачайте `app-release.apk`, разрешите установку из неизвестных источников и откройте файл. Можно поставить поверх прошлой версии.
           files: android/app/build/outputs/apk/release/app-release.apk
