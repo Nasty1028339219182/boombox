@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package app.tonica.ui
 
 import android.content.Intent
@@ -36,7 +38,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -44,11 +45,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -77,7 +76,6 @@ import app.tonica.data.ArtistIndex
 import app.tonica.data.DownloadedTrack
 import app.tonica.data.NdSession
 import app.tonica.data.SearchResult
-import app.tonica.data.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -124,10 +122,15 @@ fun LoginScreen(app: TonicaApp) {
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center,
         ) {
-            Text("Т", color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Text("B", color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 26.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(20.dp))
-        Text("Тоника", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+        Text(
+            "Boombox",
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         Spacer(Modifier.height(8.dp))
         Text(
             "Скачивайте музыку с Navidrome. Исполнители, альбомы и офлайн-библиотека.",
@@ -177,7 +180,7 @@ fun LoginScreen(app: TonicaApp) {
         )
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
             Checkbox(checked = rememberMe, onCheckedChange = { rememberMe = it })
-            Text("Запомнить вход", style = MaterialTheme.typography.bodyMedium)
+            Text("Запомнить вход", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
         }
         if (error != null) {
             Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
@@ -228,7 +231,13 @@ fun LibraryScreen(app: TonicaApp, session: NdSession, onArtist: (String) -> Unit
     }
 
     Column(Modifier.fillMaxSize()) {
-        Text("Библиотека", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp))
+        Text(
+            "Библиотека",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+        )
         Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = tab == 0, onClick = { tab = 0 }, label = { Text("Исполнители") })
             FilterChip(selected = tab == 1, onClick = { tab = 1 }, label = { Text("Альбомы") })
@@ -276,35 +285,18 @@ private fun ArtistRow(app: TonicaApp, session: NdSession, artist: Artist, onClic
         CoverArt(app.client.coverUrl(session, artist.coverArt, 120), 56.dp, 18.dp)
         Spacer(Modifier.width(12.dp))
         Column {
-            Text(artist.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                artist.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(albumsLabel(artist.albumCount), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
-@Composable
-private fun AlbumRow(app: TonicaApp, session: NdSession, album: Album, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CoverArt(app.client.coverUrl(session, album.coverArt, 160), 56.dp, 12.dp)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(album.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                listOfNotNull(album.artist.takeIf { it.isNotBlank() }, album.year.takeIf { it > 0 }?.toString())
-                    .joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArtistScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> Unit, onAlbum: (String) -> Unit) {
     var artist by remember { mutableStateOf<Artist?>(null) }
@@ -328,72 +320,67 @@ fun ArtistScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> U
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(artist?.name ?: "Исполнитель") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-            )
-        },
-    ) { padding ->
-        when {
-            loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            error != null -> Box(Modifier.padding(padding)) { EmptyState("Ошибка", error!!) }
-            else -> LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(bottom = 24.dp)) {
-                item {
-                    val a = artist ?: return@item
-                    Column(Modifier.padding(20.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        CoverArt(app.client.coverUrl(session, a.coverArt, 400), 160.dp, 28.dp)
-                        Spacer(Modifier.height(16.dp))
-                        Text(a.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text(albumsLabel(albums.size), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
+            val a = artist
+            if (a != null) {
+                CoverArt(app.client.coverUrl(session, a.coverArt, 120), 48.dp, 12.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        a.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(albumsLabel(albums.size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            } else {
+                Text("Исполнитель", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+        when {
+            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            error != null -> EmptyState("Ошибка", error!!)
+            else -> LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
                 items(albums, key = { it.id }) { album ->
                     val localCount = tracks.count { it.albumId == album.id }
-                    Row(
-                        Modifier.fillMaxWidth().clickable { onAlbum(album.id) }.padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CoverArt(app.client.coverUrl(session, album.coverArt, 160), 56.dp, 12.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(album.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(
-                                buildString {
-                                    if (album.year > 0) append(album.year)
-                                    if (album.songCount > 0) {
-                                        if (isNotEmpty()) append(" · ")
-                                        append(tracksLabel(album.songCount))
-                                    }
-                                    if (localCount > 0) {
-                                        if (isNotEmpty()) append(" · ")
-                                        append("скачано $localCount")
-                                    }
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                    val subtitle = buildString {
+                        if (album.year > 0) append(album.year)
+                        if (album.songCount > 0) {
+                            if (isNotEmpty()) append(" · ")
+                            append(tracksLabel(album.songCount))
+                        }
+                        if (localCount > 0) {
+                            if (isNotEmpty()) append(" · ")
+                            append("скачано $localCount")
                         }
                     }
+                    AlbumRow(app, session, album, subtitle = subtitle.ifBlank { null }) { onAlbum(album.id) }
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> Unit) {
     var album by remember { mutableStateOf<Album?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var ready by remember { mutableStateOf(false) }
     val tracks by app.downloads.tracks.collectAsState()
     val jobs by app.downloads.jobs.collectAsState()
 
     LaunchedEffect(id) {
         loading = true
+        ready = false
         try {
             album = withContext(Dispatchers.IO) { app.client.album(session, id) }
         } catch (e: Exception) {
@@ -401,62 +388,87 @@ fun AlbumScreen(app: TonicaApp, session: NdSession, id: String, onBack: () -> Un
         } finally {
             loading = false
         }
+        delay(400)
+        ready = true
     }
 
     val songs = album?.songs.orEmpty()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(album?.name ?: "Альбом") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-            )
-        },
-    ) { padding ->
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
+            val a = album
+            if (a != null) {
+                CoverArt(app.client.coverUrl(session, a.coverArt, 160), 52.dp, 10.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        a.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        listOfNotNull(a.artist.takeIf { it.isNotBlank() }, a.year.takeIf { it > 0 }?.toString()).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            } else {
+                Text("Альбом", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
         when {
-            loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            error != null -> Box(Modifier.padding(padding)) { EmptyState("Ошибка", error!!) }
-            else -> LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(bottom = 24.dp)) {
-                item {
-                    val a = album ?: return@item
-                    Column(Modifier.padding(20.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        CoverArt(app.client.coverUrl(session, a.coverArt, 400), 180.dp, 24.dp)
-                        Spacer(Modifier.height(16.dp))
-                        Text(a.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text(a.artist, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(16.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { app.play(session, songs, 0) }, shape = RoundedCornerShape(16.dp)) {
-                                Icon(Icons.Filled.PlayArrow, null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Слушать")
-                            }
-                            FilledTonalButton(
-                                onClick = { app.download(session, songs.filter { t -> tracks.none { it.id == t.id } }) },
-                                shape = RoundedCornerShape(16.dp),
-                            ) {
-                                Icon(Icons.Filled.Download, null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Скачать альбом")
-                            }
-                        }
+            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            error != null -> EmptyState("Ошибка", error!!)
+            else -> {
+                Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = { app.play(session, songs, 0) },
+                        enabled = ready && songs.isNotEmpty(),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Слушать")
+                    }
+                    FilledTonalButton(
+                        onClick = { app.download(session, songs.filter { t -> tracks.none { it.id == t.id } }) },
+                        enabled = ready,
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Icon(Icons.Filled.Download, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Скачать")
                     }
                 }
-                items(songs, key = { it.id }) { song ->
-                    val job = jobs.find { it.id == song.id }
-                    TrackRow(
-                        song = song,
-                        session = session,
-                        app = app,
-                        downloaded = tracks.any { it.id == song.id },
-                        downloading = job != null && job.error == null,
-                        progress = job?.progress ?: 0f,
-                        onPlay = { app.play(session, songs, songs.indexOf(song)) },
-                        onDownload = { app.download(session, listOf(song)) },
-                    )
-                    if (job?.error != null) {
-                        Text(job.error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 76.dp, bottom = 8.dp))
+                LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+                    items(songs, key = { it.id }) { song ->
+                        val job = jobs.find { it.id == song.id }
+                        TrackRow(
+                            song = song,
+                            session = session,
+                            app = app,
+                            downloaded = tracks.any { it.id == song.id },
+                            downloading = job != null && job.error == null,
+                            progress = job?.progress ?: 0f,
+                            enabled = ready,
+                            onPlay = { app.play(session, songs, songs.indexOf(song)) },
+                            onDownload = { app.download(session, listOf(song)) },
+                        )
+                        if (job?.error != null) {
+                            Text(job.error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 76.dp, bottom = 8.dp))
+                        }
                     }
                 }
             }
@@ -490,7 +502,13 @@ fun SearchScreen(app: TonicaApp, session: NdSession, onArtist: (String) -> Unit,
     }
 
     Column(Modifier.fillMaxSize()) {
-        Text("Поиск", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp))
+        Text(
+            "Поиск",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+        )
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -548,7 +566,13 @@ fun DownloadsScreen(app: TonicaApp, session: NdSession) {
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Скачано", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(
+                "Скачано",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
             if (tracks.isNotEmpty()) {
                 TextButton(onClick = { confirm = "Удалить всю офлайн-библиотеку?" to { app.downloads.removeAll() } }) {
                     Text("Очистить")
@@ -571,7 +595,7 @@ fun DownloadsScreen(app: TonicaApp, session: NdSession) {
                     val (artistId, artistName) = key
                     item(key = "ar-$artistId") {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(artistName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                            Text(artistName, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
                             IconButton(onClick = {
                                 confirm = "Удалить все треки $artistName?" to { app.downloads.removeArtist(artistId) }
                             }) { Icon(Icons.Filled.Delete, "Удалить исполнителя") }
@@ -624,7 +648,7 @@ private fun DownloadedRow(app: TonicaApp, session: NdSession, track: DownloadedT
         CoverArt(app.client.coverUrl(session, track.coverArt, 80), 48.dp, 10.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface)
             Text(formatDuration(track.duration), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, "Удалить трек") }
@@ -636,6 +660,7 @@ fun SettingsScreen(app: TonicaApp, session: NdSession) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val folder by app.sessionStore.folderUri.collectAsState(initial = null)
+    val showMini by app.sessionStore.showMiniPlayer.collectAsState(initial = true)
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         if (uri != null) {
             context.contentResolver.takePersistableUriPermission(
@@ -647,12 +672,31 @@ fun SettingsScreen(app: TonicaApp, session: NdSession) {
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)) {
-        Text("Настройки", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(
+            "Настройки",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         Spacer(Modifier.height(20.dp))
         Text("Аккаунт", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(8.dp))
-        Text(session.name.ifBlank { session.username }, style = MaterialTheme.typography.titleMedium)
+        Text(session.name.ifBlank { session.username }, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
         Text(session.serverUrl, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(24.dp))
+        Text("Плеер", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Text("Мини-плеер", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    "Если выключить — панель снизу скрыта всегда. Её также можно смахнуть вниз или закрыть крестиком до следующего трека.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = showMini, onCheckedChange = { scope.launch { app.sessionStore.setShowMiniPlayer(it) } })
+        }
         Spacer(Modifier.height(24.dp))
         Text("Папка загрузок", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(8.dp))

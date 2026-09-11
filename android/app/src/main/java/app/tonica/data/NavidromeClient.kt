@@ -59,7 +59,7 @@ class NavidromeClient {
             .addQueryParameter("t", session.token)
             .addQueryParameter("s", session.salt)
             .addQueryParameter("v", "1.16.1")
-            .addQueryParameter("c", "Tonica")
+            .addQueryParameter("c", "Boombox")
             .addQueryParameter("f", "json")
         extra.forEach { (k, v) -> builder.addQueryParameter(k, v) }
         return builder.build().toString()

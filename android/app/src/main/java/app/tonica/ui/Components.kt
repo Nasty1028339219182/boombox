@@ -2,6 +2,7 @@ package app.tonica.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,12 +10,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
@@ -30,17 +34,26 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.tonica.TonicaApp
+import app.tonica.data.Album
 import app.tonica.data.NdSession
 import app.tonica.data.Song
 import coil.compose.AsyncImage
+import kotlin.math.roundToInt
 
 fun formatDuration(seconds: Int): String {
     if (seconds <= 0) return "0:00"
@@ -115,12 +128,13 @@ fun TrackRow(
     progress: Float,
     onPlay: () -> Unit,
     onDownload: () -> Unit,
+    enabled: Boolean = true,
 ) {
     val cover = app.client.coverUrl(session, song.coverArt, 80)
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onPlay)
+            .clickable(enabled = enabled, onClick = onPlay)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -130,6 +144,7 @@ fun TrackRow(
             Text(
                 song.title,
                 style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -149,7 +164,7 @@ fun TrackRow(
                 strokeWidth = 2.dp,
             )
         } else if (!downloaded) {
-            IconButton(onClick = onDownload) {
+            IconButton(onClick = onDownload, enabled = enabled) {
                 Icon(
                     Icons.Filled.Download,
                     contentDescription = "Скачать ${song.title}",
@@ -161,33 +176,109 @@ fun TrackRow(
 }
 
 @Composable
-fun MiniPlayer(app: TonicaApp, session: NdSession) {
+fun AlbumRow(
+    app: TonicaApp,
+    session: NdSession,
+    album: Album,
+    subtitle: String? = null,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CoverArt(app.client.coverUrl(session, album.coverArt, 160), 56.dp, 12.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                album.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val line = subtitle ?: listOfNotNull(
+                album.artist.takeIf { it.isNotBlank() },
+                album.year.takeIf { it > 0 }?.toString(),
+            ).joinToString(" · ")
+            if (line.isNotBlank()) {
+                Text(
+                    line,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = "Открыть альбом",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+fun MiniPlayer(app: TonicaApp, session: NdSession, onDismiss: () -> Unit) {
     val current by app.player.current.collectAsState()
     val playing by app.player.playing.collectAsState()
     val song = current ?: return
     val cover = app.client.coverUrl(session, song.coverArt, 80)
+    var offsetY by remember(song.id) { mutableFloatStateOf(0f) }
+    val alpha = (1f - offsetY / 140f).coerceIn(0.25f, 1f)
+
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(20.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .offset { IntOffset(0, offsetY.roundToInt()) }
+            .graphicsLayer { this.alpha = alpha },
     ) {
         Row(
-            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            Modifier.padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CoverArt(cover, 44.dp, 10.dp)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    song.artist,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Row(
+                Modifier
+                    .weight(1f)
+                    .pointerInput(song.id) {
+                        detectVerticalDragGestures(
+                            onDragEnd = {
+                                if (offsetY > 56f) onDismiss() else offsetY = 0f
+                            },
+                            onVerticalDrag = { change, dy ->
+                                change.consume()
+                                offsetY = (offsetY + dy).coerceAtLeast(0f)
+                            },
+                        )
+                    },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CoverArt(cover, 44.dp, 10.dp)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        song.title,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        song.artist,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Filled.Close, contentDescription = "Скрыть плеер")
             }
             IconButton(onClick = { app.player.prev() }) {
                 Icon(Icons.Filled.SkipPrevious, contentDescription = "Предыдущий")
@@ -195,7 +286,7 @@ fun MiniPlayer(app: TonicaApp, session: NdSession) {
             IconButton(
                 onClick = { app.player.toggle() },
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary),
             ) {
@@ -231,7 +322,7 @@ fun EmptyState(title: String, subtitle: String) {
             Icon(Icons.Filled.MusicNote, null, tint = MaterialTheme.colorScheme.primary)
         }
         Spacer(Modifier.height(16.dp))
-        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.height(6.dp))
         Text(
             subtitle,

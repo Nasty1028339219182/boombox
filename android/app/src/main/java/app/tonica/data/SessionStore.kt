@@ -21,6 +21,7 @@ class SessionStore(private val context: Context) {
     private val kToken = stringPreferencesKey("token")
     private val kRemember = booleanPreferencesKey("remember")
     private val kFolder = stringPreferencesKey("folder")
+    private val kMini = booleanPreferencesKey("mini_player")
     private val ephemeral = MutableStateFlow<NdSession?>(null)
 
     private val persisted: Flow<NdSession?> = context.dataStore.data.map { prefs ->
@@ -41,6 +42,8 @@ class SessionStore(private val context: Context) {
     val session: Flow<NdSession?> = combine(persisted, ephemeral) { stored, live -> live ?: stored }
 
     val folderUri: Flow<String?> = context.dataStore.data.map { it[kFolder] }
+
+    val showMiniPlayer: Flow<Boolean> = context.dataStore.data.map { it[kMini] != false }
 
     suspend fun current(): NdSession? = session.first()
 
@@ -73,5 +76,9 @@ class SessionStore(private val context: Context) {
         context.dataStore.edit { prefs ->
             if (uri == null) prefs.remove(kFolder) else prefs[kFolder] = uri
         }
+    }
+
+    suspend fun setShowMiniPlayer(value: Boolean) {
+        context.dataStore.edit { prefs -> prefs[kMini] = value }
     }
 }

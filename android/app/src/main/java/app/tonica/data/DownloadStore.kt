@@ -203,7 +203,7 @@ class DownloadStore(private val context: Context) {
             }
         }
         val root = context.getExternalFilesDir(null) ?: context.filesDir
-        val dest = File(root, "Tonica/$rel")
+        val dest = File(root, "Boombox/$rel")
         dest.parentFile?.mkdirs()
         FileOutputStream(dest).use { it.write(bytes) }
         return dest.absolutePath

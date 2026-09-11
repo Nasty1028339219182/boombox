@@ -1,5 +1,6 @@
 package app.tonica.ui
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,12 +66,21 @@ fun AppRoot(app: TonicaApp) {
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route ?: "library"
     val showTabs = tabs.any { it.route == route }
+    val showMiniPref by app.sessionStore.showMiniPlayer.collectAsState(initial = true)
+    val nowPlaying by app.player.current.collectAsState()
+    var dismissedId by remember { mutableStateOf<String?>(null) }
+    val showMini = showMiniPref && nowPlaying != null && nowPlaying?.id != dismissedId
+
+    fun openArtist(id: String) = nav.navigate("artist/${Uri.encode(id)}")
+    fun openAlbum(id: String) = nav.navigate("album/${Uri.encode(id)}")
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         bottomBar = {
             Column {
-                MiniPlayer(app, current)
+                if (showMini) {
+                    MiniPlayer(app, current, onDismiss = { dismissedId = nowPlaying?.id })
+                }
                 if (showTabs) {
                     NavigationBar {
                         tabs.forEach { tab ->
@@ -98,31 +108,19 @@ fun AppRoot(app: TonicaApp) {
             modifier = Modifier.padding(padding),
         ) {
             composable("library") {
-                LibraryScreen(
-                    app, current,
-                    onArtist = { nav.navigate("artist/$it") },
-                    onAlbum = { nav.navigate("album/$it") },
-                )
+                LibraryScreen(app, current, onArtist = ::openArtist, onAlbum = ::openAlbum)
             }
             composable("search") {
-                SearchScreen(
-                    app, current,
-                    onArtist = { nav.navigate("artist/$it") },
-                    onAlbum = { nav.navigate("album/$it") },
-                )
+                SearchScreen(app, current, onArtist = ::openArtist, onAlbum = ::openAlbum)
             }
             composable("downloads") { DownloadsScreen(app, current) }
             composable("settings") { SettingsScreen(app, current) }
             composable("artist/{id}") { entry ->
-                val id = entry.arguments?.getString("id") ?: return@composable
-                ArtistScreen(
-                    app, current, id,
-                    onBack = { nav.popBackStack() },
-                    onAlbum = { nav.navigate("album/$it") },
-                )
+                val id = Uri.decode(entry.arguments?.getString("id") ?: return@composable)
+                ArtistScreen(app, current, id, onBack = { nav.popBackStack() }, onAlbum = ::openAlbum)
             }
             composable("album/{id}") { entry ->
-                val id = entry.arguments?.getString("id") ?: return@composable
+                val id = Uri.decode(entry.arguments?.getString("id") ?: return@composable)
                 AlbumScreen(app, current, id, onBack = { nav.popBackStack() })
             }
         }

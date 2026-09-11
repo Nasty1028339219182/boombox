@@ -19,23 +19,23 @@ jobs:
           java-version: "17"
       - name: Make gradlew executable
         run: chmod +x android/gradlew
-      - name: Assemble debug APK
+      - name: Assemble release APK
         working-directory: android
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: ./gradlew assembleRelease --stacktrace --no-daemon
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: tonica-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: boombox-1.0.1
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: Тоника 1.0.${{ github.run_number }}
+          tag_name: v1.0.1
+          name: Boombox 1.0.1
           body: |
-            Нативное Android-приложение **Тоника** — клиент Navidrome.
+            **Boombox 1.0.1** — release-сборка (не debug).
 
-            Установка: скачайте `app-debug.apk`, разрешите установку из неизвестных источников и откройте файл.
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+            Установка: скачайте `app-release.apk`, разрешите установку из неизвестных источников и откройте файл. Можно поставить поверх прошлой версии.
+          files: android/app/build/outputs/apk/release/app-release.apk
           fail_on_unmatched_files: true

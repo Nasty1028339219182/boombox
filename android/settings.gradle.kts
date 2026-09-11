@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "Tonica"
+rootProject.name = "Boombox"
 include(":app")
