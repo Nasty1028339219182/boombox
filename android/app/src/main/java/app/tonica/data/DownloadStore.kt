@@ -190,7 +190,7 @@ class DownloadStore(private val context: Context) {
         if (!folderUri.isNullOrBlank()) {
             val tree = DocumentFile.fromTreeUri(context, Uri.parse(folderUri))
             if (tree != null) {
-                var dir = tree
+                var dir: DocumentFile = tree
                 parts.dropLast(1).forEach { name ->
                     dir = dir.findFile(name) ?: dir.createDirectory(name) ?: dir
                 }
